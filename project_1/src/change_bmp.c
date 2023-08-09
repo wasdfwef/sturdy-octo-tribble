@@ -1,17 +1,84 @@
 //change_bmp.c
-#include "change_bmp.h"
 #include "show_bmp.h"
-#include <fcntl.h> //包含open函数的定义
-#include <unistd.h> //包含read, close函数的定义
-#include <string.h> //包含strcmp函数的定义
-#include <linux/input.h> //包含input_event结构体和EV_ABS、ABS_X、ABS_Y、EV_KEY、BTN_TOUCH等宏的定义
-#include <linux/uinput.h> //包含uinput_user_dev结构体的定义
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/mman.h>
+#include <linux/input.h>
+
+#define WIDTH 800
+#define HEIGHT 480
+
+int lcd_fd = -1;
+int *mp = NULL;
 
 //定义一个结构体，用于存储触摸坐标
 struct touch_pos {
-	int x;
-	int y;
+    int x;
+    int y;
 };
+
+//定义一个函数，用于显示指定的bmp图片
+void show_bmp(char *bmp_name)
+{
+    //打开LCD，路径：/dev/fb0
+    lcd_fd = open("/dev/fb0", O_RDWR);
+    if (lcd_fd < 0)
+    {
+        perror("open lcd failed");
+        return;
+    }
+    //内存映射
+    mp = mmap(NULL, WIDTH * HEIGHT * 4, PROT_READ | PROT_WRITE, MAP_SHARED, lcd_fd, 0);
+    if (mp == NULL)
+    {
+        perror("mmap failed");
+        return;
+    }
+
+    //打开bmp图片
+    int bmp_fd = open(bmp_name, O_RDWR);
+    if (bmp_fd < 0)
+    {
+        perror("open bmp failed");
+        return;
+    }
+    //偏移54字节（因为前54不是图片数据）
+    lseek(bmp_fd, 54, SEEK_SET);
+
+    //读取bmp数据
+    char bmp_buf[WIDTH * HEIGHT * 3];
+    //char color_buf[WIDTH * HEIGHT * 4]; //删除这个未使用的变量
+
+    read(bmp_fd, bmp_buf, sizeof(bmp_buf));
+
+    int x, y;
+    int color;
+    int i = 0;
+    unsigned char r, g, b;
+    for (y = 0; y < HEIGHT; y++)
+    {
+        for (x = 0; x < WIDTH; x++)
+        {
+            b = bmp_buf[i++];
+            g = bmp_buf[i++];
+            r = bmp_buf[i++];
+            color = b | g << 8 | r << 16;
+            *(mp + 800 * (479 - y) + x) = color;
+        }
+    }
+    //关闭bmp
+    close(bmp_fd);
+
+	//关闭lcd
+	close(lcd_fd);
+	//解除映射
+	munmap(mp,WIDTH*HEIGHT*4);
+}
 
 //定义一个函数，用于获取用户的触摸坐标
 struct touch_pos get_touch_pos(void)
@@ -50,129 +117,36 @@ struct touch_pos get_touch_pos(void)
 	return pos; //返回用户的触摸坐标
 }
 
-//定义一个函数，用于判断用户是否点击了"杂食"对应的区域
-int is_food_clicked(void)
-{
-	struct touch_pos pos = get_touch_pos(); //获取用户的触摸坐标
-	
-	//判断用户的触摸坐标是否在"杂食"区域内
-	if (pos.x >= 0 && pos.x <= 100 && pos.y >= 0 && pos.y <= 100)
-	{
-		return 1; //返回1表示点击了"杂食"
-	}
-	else
-	{
-		return 0; //返回0表示没有点击"杂食"
-	}
-}
-
-//定义一个函数，用于判断用户是否点击了"餐具"对应的区域
-int is_tableware_clicked(void)
-{
-	struct touch_pos pos = get_touch_pos(); //获取用户的触摸坐标
-	
-	//判断用户的触摸坐标是否在"餐具"区域内
-	if (pos.x >= 0 && pos.x <= 100 && pos.y >= 120 && pos.y <= 220)
-	{
-		return 1; //返回1表示点击了"餐具"
-	}
-	else
-	{
-		return 0; //返回0表示没有点击"餐具"
-	}
-}
-
-//定义一个函数，用于判断用户是否点击了"用具"对应的区域
-int is_tool_clicked(void)
-{
-	struct touch_pos pos = get_touch_pos(); //获取用户的触摸坐标
-	
-	//判断用户的触摸坐标是否在"用具"区域内
-	if (pos.x >= 0 && pos.x <= 100 && pos.y >= 240 && pos.y <= 340)
-	{
-		return 1; //返回1表示点击了"用具"
-	}
-	else
-	{
-		return 0; //返回0表示没有点击"用具"
-	}
-}
-
-//定义一个函数，用于判断用户是否点击了"结算"对应的区域
-int is_checkout_clicked(void)
-{
-	struct touch_pos pos = get_touch_pos(); //获取用户的触摸坐标
-	
-	//判断用户的触摸坐标是否在"结算"区域内
-	if (pos.x >= 560 && pos.x <= 760 && pos.y >= 400 && pos.y <= 480)
-	{
-		return 1; //返回1表示点击了"结算"
-	}
-	else
-	{
-		return 0; //返回0表示没有点击"结算"
-	}
-}
-
-//定义一个函数，用于根据用户的触摸坐标切换不同的bmp图片
+//定义一个函数，用于根据触摸坐标显示不同的图片
 void change_bmp(void)
 {
-    //定义一个变量，用于存储当前显示的图片名称
-    char *current_bmp = "./菜单.bmp";
+    //获取用户的触摸坐标
+    struct touch_pos pos = get_touch_pos();
 
-    while (1) //无限循环
+    //判断用户点击了哪个区域
+    if (pos.x >= 0 && pos.x <= 100 && pos.y >= 0 && pos.y <= 480) //如果用户点击了广告页面左边的"点击购买商品"字样
     {
-        if (is_food_clicked()) //如果用户点击了"杂食"
-        {
-            if (strcmp(current_bmp, "./菜单.bmp") == 0) //如果当前显示的是菜单.bmp
-            {
-                show_bmp("./杂食.bmp"); //显示杂食.bmp
-                current_bmp = "./杂食.bmp"; //更新当前显示的图片名称
-            }
-            else if (strcmp(current_bmp, "./杂食.bmp") == 0) //如果当前显示的是杂食.bmp
-            {
-                show_bmp("./菜单.bmp"); //显示菜单.bmp
-                current_bmp = "./菜单.bmp"; //更新当前显示的图片名称
-            }
-        }
-        else if (is_tableware_clicked()) //如果用户点击了"餐具"
-        {
-            if (strcmp(current_bmp, "./菜单.bmp") == 0) //如果当前显示的是菜单.bmp
-            {
-                show_bmp("./餐具.bmp"); //显示餐具.bmp
-                current_bmp = "./餐具.bmp"; //更新当前显示的图片名称
-            }
-            else if (strcmp(current_bmp, "./餐具.bmp") == 0) //如果当前显示的是餐具.bmp
-            {
-                show_bmp("./菜单.bmp"); //显示菜单.bmp
-                current_bmp = "./菜单.bmp"; //更新当前显示的图片名称
-            }
-        }
-        else if (is_tool_clicked()) //如果用户点击了"用具"
-        {
-            if (strcmp(current_bmp, "./菜单.bmp") == 0) //如果当前显示的是菜单.bmp
-            {
-                show_bmp("./用具.bmp"); //显示用具.bmp
-                current_bmp = "./用具.bmp"; //更新当前显示的图片名称
-            }
-            else if (strcmp(current_bmp, "./用具.bmp") == 0) //如果当前显示的是用具.bmp
-            {
-                show_bmp("./菜单.bmp"); //显示菜单.bmp
-                current_bmp = "./菜单.bmp"; //更新当前显示的图片名称
-            }
-        }
-        else if (is_checkout_clicked()) //如果用户点击了"结算"
-        {
-            if (strcmp(current_bmp, "./菜单.bmp") == 0) //如果当前显示的是菜单.bmp
-            {
-                show_bmp("./结算.bmp"); //显示结算.bmp
-                current_bmp = "./结算.bmp"; //更新当前显示的图片名称
-            }
-            else if (strcmp(current_bmp, "./结算.bmp") == 0) //如果当前显示的是结算.bmp
-            {
-                show_bmp("./菜单.bmp"); //显示菜单.bmp
-                current_bmp = "./菜单.bmp"; //更新当前显示的图片名称 
-            }
-        }
+        //显示首页界面的图片
+        show_bmp("1.bmp");
+    }
+    else if (pos.x >= 0 && pos.x <= 100 && pos.y >= 0 && pos.y <= 100) //如果用户点击了导航栏的"杂食"
+    {
+        //显示杂食的图片
+        show_bmp("0.bmp");
+    }
+    else if (pos.x >= 0 && pos.x <= 100 && pos.y >= 120 && pos.y <= 220) //如果用户点击了导航栏的"餐具"
+    {
+        //显示餐具的图片
+        show_bmp("2.bmp");
+    }
+    else if (pos.x >= 0 && pos.x <= 100 && pos.y >= 240 && pos.y <= 340) //如果用户点击了导航栏的"用具"
+    {
+        //显示用具的图片
+        show_bmp("3.bmp");
+    }
+    else if (pos.x >= 560 && pos.x <= 760 && pos.y >= 400 && pos.y <= 480) //如果用户点击了结算
+    {
+        //显示结算的图片
+        show_bmp("m.bmp");
     }
 }
