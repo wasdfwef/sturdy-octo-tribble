@@ -1,0 +1,3 @@
+注意：中文字符   需要font.c的格式 改成 ANSI
+
+arm-linux-gcc	 font.c	 -o 	arm_font 	-I ../include/   -L ../lib/	 -lfont 

@@ -9,5 +9,7 @@ int *mp;
 
 //定义一个函数，用于显示指定的bmp图片
 void show_bmp(char *bmp_name);
+void change_bmp(void); // declare the function change_bmp
+
 
 #endif //结束条件编译指令

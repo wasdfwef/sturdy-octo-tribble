@@ -73,24 +73,31 @@ void change_bmp(void)
         //显示首页界面的图片
         show_bmp("1.bmp");
     }
-    else if (pos.x >= 0 && pos.x <= 100 && pos.y >= 0 && pos.y <= 100) //如果用户点击了导航栏的"杂食"
+   if (pos.x >= 0 && pos.x <= 100 && pos.y >= 0 && pos.y <= 100) //如果用户点击了导航栏的"杂食"
     {
         //显示杂食的图片
-        show_bmp("0.bmp");
+        show_bmp("5.bmp");
     }
-    else if (pos.x >= 0 && pos.x <= 100 && pos.y >= 120 && pos.y <= 220) //如果用户点击了导航栏的"餐具"
+    if (pos.x >= 0 && pos.x <= 100 && pos.y >= 120 && pos.y <= 220) //如果用户点击了导航栏的"餐具"
     {
         //显示餐具的图片
         show_bmp("2.bmp");
     }
-    else if (pos.x >= 0 && pos.x <= 100 && pos.y >= 240 && pos.y <= 340) //如果用户点击了导航栏的"用具"
+    if (pos.x >= 0 && pos.x <= 100 && pos.y >= 240 && pos.y <= 340) //如果用户点击了导航栏的"用具"
     {
         //显示用具的图片
         show_bmp("3.bmp");
     }
-    else if (pos.x >= 560 && pos.x <= 760 && pos.y >= 400 && pos.y <= 480) //如果用户点击了结算
+    if (pos.x >= 560 && pos.x <= 760 && pos.y >= 400 && pos.y <= 480) //如果用户点击了结算
     {
         //显示结算的图片
         show_bmp("m.bmp");
+    }
+    else //如果用户点击了其他区域
+    {
+        //显示提示信息
+        show_bmp("tip.bmp");
+        //或者重新获取触摸坐标
+        change_bmp();
     }
 }
